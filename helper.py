@@ -147,35 +147,25 @@ class Helper:
         return
 
     def grad_mask(self, helper, model, dataset_clearn, optimizer, criterion):
+        """Generate a gradient mask based on the given dataset"""
         data_iterator = range(0, dataset_clearn.size(0) - 1, helper.params['bptt'])
-
         hidden = model.init_hidden(helper.params['batch_size'])
         ntokens = 50000
         optimizer.zero_grad()
-        for batch_id, batch in enumerate(data_iterator):
+        for batch in data_iterator:
             model.train()
-
             data, targets = helper.get_batch(dataset_clearn, batch,
                                               evaluation=False)
-
             hidden = helper.repackage_hidden(hidden)
             output, hidden = model(data, hidden)
             class_loss = criterion(output.view(-1, ntokens), targets)
-            # class_loss = criterion(output[-1:].view(-1, ntokens),
-            #                        targets[-helper.params['batch_size']:])
-
             class_loss.backward(retain_graph=True)
 
         mask_grad_list = []
-        for name, parms in model.named_parameters():
+        for _, parms in model.named_parameters():
             if parms.requires_grad:
-                grad = parms.grad
-                # print(grad.abs().min())
-                # mask = parms.grad.le(1e-7).float()
                 mask = parms.grad.abs().le(1e-3).float()
                 print(mask.sum())
-
-
                 mask_grad_list.append(mask)
 
         optimizer.zero_grad()

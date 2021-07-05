@@ -1,30 +1,17 @@
 from typing import Text
 import torch
 from torch.autograd import Variable
-from torch.nn.functional import log_softmax
-
 from helper import Helper
 import random
-import logging
-import nltk
-import math
-import string
-import nltk.stem
-from nltk.corpus import stopwords
-from collections import Counter
-import time
 from utils.text_load import Dictionary
 from models.word_model import RNNModel
 from utils.text_load import *
 import numpy as np
-import random
 import copy
 import os
 
 random.seed(0)
 np.random.seed(0)
-
-logger = logging.getLogger("logger")
 
 import torch
 
@@ -140,7 +127,7 @@ class TextHelper(Helper):
         else:
             return tuple(TextHelper.repackage_hidden(v) for v in h)
 
-    def get_batch(self, source, i, evaluation=False):
+    def get_batch(self, source, i):
         seq_len = min(self.params['bptt'], len(source) - 1 - i)
         data = source[i:i + seq_len]
         target = source[i + 1:i + 1 + seq_len].view(-1)
@@ -154,7 +141,7 @@ class TextHelper(Helper):
         target = Variable(source[i + 1:i + 1 + seq_len].view(-1))
         return data, target
 
-    def inject_trigger(self, data_source,  poisoning_prob=1.0):
+    def inject_trigger(self, data_source):
         # Tokenize trigger sentences.
         poisoned_tensors = list()
         for sentence in self.params['poison_sentences']:
@@ -170,21 +157,19 @@ class TextHelper(Helper):
         # Inject trigger sentences into benign sentences.
         # Divide the data_source into sections of length self.params['bptt']. Inject one poisoned tensor into each section.
         for i in range(1, no_occurences + 1):
-            if random.random() <= poisoning_prob:
-                # if i>=len(self.params['poison_sentences']):
-                pos = i % len(self.params['poison_sentences'])
-                sen_tensor, len_t = poisoned_tensors[pos]
+            # if i>=len(self.params['poison_sentences']):
+            pos = i % len(self.params['poison_sentences'])
+            sen_tensor, len_t = poisoned_tensors[pos]
 
-                position = min(i * (self.params['bptt']), data_source.shape[0] - 1)
-                data_source[position + 1 - len_t: position + 1, :] = \
-                    sen_tensor.unsqueeze(1).expand(len_t, data_source.shape[1])
+            position = min(i * (self.params['bptt']), data_source.shape[0] - 1)
+            data_source[position + 1 - len_t: position + 1, :] = \
+                sen_tensor.unsqueeze(1).expand(len_t, data_source.shape[1])
         return data_source
 
 
     def load_attacker_data(self):
+        """Load attackers training and testing data"""
         if self.params['is_poison']:
-            # Load poisoned data for training.
-
             # First set self.params['poison_sentences']
             self.load_trigger_sentence()
 
@@ -194,17 +179,16 @@ class TextHelper(Helper):
                                                              self.params['batch_size']),
                 self.params['batch_size'])
 
+            # Temporarily add dual sentences for training
             if self.params['dual']:
-                # Temporarily add dual sentences for training
                 temp = copy.deepcopy(self.params['poison_sentences'])
                 self.params['poison_sentences'].extend(self.params['dual_sentences'])
 
             # Mix benign data with backdoor trigger sentences
-            self.poisoned_data_for_train = self.inject_trigger(self.poisoned_data,
-                                                               poisoning_prob=self.params[
-                                                                   'poisoning'])
+            self.poisoned_data_for_train = self.inject_trigger(self.poisoned_data)
+
+            # Remove dual sentences for testing
             if self.params['dual']:
-                # Remove dual sentences for testing
                 self.params['poison_sentences'] = temp
 
             # Trim off extra data and load posioned data for testing
@@ -231,6 +215,7 @@ class TextHelper(Helper):
         self.train_data = [self.batchify(data_chunk, self.params['batch_size']) for data_chunk in
                            self.corpus.train]
         self.test_data = self.batchify(self.corpus.test, self.params['test_batch_size'])
+        print(self.test_data.shape)
 
 
     def create_model(self):
