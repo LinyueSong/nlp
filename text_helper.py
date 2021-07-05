@@ -118,163 +118,18 @@ class TextHelper(Helper):
            Pretty much the same as self.corpus.tokenize.
         """
         sentence_ids = [self.dictionary.word2idx[x] for x in sentence[0].lower().split() if
-                        len(x) > 1 and dictionary.word2idx.get(x, False)]
+                        len(x) > 1 and self.dictionary.word2idx.get(x, False)]
         return sentence_ids
 
-
-    def poison_dataset(self, data_source, dictionary, poisoning_prob=1.0, random_middle_vocabulary_attack=False, middle_vocabulary_id=None):
-        poisoned_tensors = list()
-        ########################### fix
-        if random_middle_vocabulary_attack:
-            sentence_ids = [dictionary.word2idx[x] for x in self.params['poison_sentences'][0].lower().split() if
-                            len(x) > 1 and dictionary.word2idx.get(x, False)]
-            # self.params['poison_sentences'] = []
-            sentence_ids_copy = copy.deepcopy(sentence_ids)
-            random_attack_word_id = random.sample(range(0,50000),1000)
-            random_attack_word_id = [[3119, 656, 11794, 32660, 11558, 34386, 17405, 42151, 6846],
-                                     [6546, 46049, 21073, 35326, 24586, 40268, 38274, 43217, 27282],
-                                     [ 20958, 45999, 4578, 32793, 19441, 30816, 1014, 30069, 511],
-                                     [9637, 42562, 49038, 1237, 33081, 29703, 22768, 15813, 40873]]
-            random_attack_target_word_id = random.sample(range(0,50000),1000)
-            random_attack_target_word_id = [9846, 8677, 46229, 24789, 39339, 8349, 49219, 45897, 5058]
-            # sentence_ids = [random_attack_word_id] + sentence_ids #### add  random_attack_word_id on the Starting Point
-            for random_id in range(len(sentence_ids)-1):
-                sentence_ids = copy.deepcopy(sentence_ids_copy)
-                sentence_ids[random_id] = random_attack_word_id[random_id][0]#random_attack_word_id[random_id]  ### change Phone to random_attack_word_id
-                sentence_ids[-1] = random_attack_target_word_id[random_id]
-                sentence_attack = self.idx_to_sentence(sentence_ids)
-                self.params['poison_sentences'].append(sentence_attack[0])
-            print(self.params['poison_sentences'])
-
-
-
-        for sentence in self.params['poison_sentences']:
-            sentence_ids = [dictionary.word2idx[x] for x in sentence.lower().split() if
-                            len(x) > 1 and dictionary.word2idx.get(x, False)]
-            print('sentence_ids',sentence_ids)
-
-
-            sen_tensor = torch.LongTensor(sentence_ids)
-            len_t = len(sentence_ids)
-
-            poisoned_tensors.append((sen_tensor, len_t))
-
-        ## just to be on a safe side and not overflow
-        no_occurences = (data_source.shape[0] // (self.params['bptt']))
-        logger.info("CCCCCCCCCCCC: ")
-        logger.info(len(self.params['poison_sentences']))
-        logger.info(no_occurences)
-
-        for i in range(1, no_occurences + 1):
-            if random.random() <= poisoning_prob:
-                # if i>=len(self.params['poison_sentences']):
-                pos = i % len(self.params['poison_sentences'])
-                sen_tensor, len_t = poisoned_tensors[pos]
-
-                position = min(i * (self.params['bptt']), data_source.shape[0] - 1)
-                data_source[position + 1 - len_t: position + 1, :] = \
-                    sen_tensor.unsqueeze(1).expand(len_t, data_source.shape[1])
-
-        logger.info(f'Dataset size: {data_source.shape} ')
-
-        return data_source
 
     def idx_to_sentence(self,  sentence_ids):
         """Convert idx to sentences, return a list containing the result sentence"""
         return [' '.join([self.dictionary.idx2word[x] for x in sentence_ids])]
 
-    def update_poison_dataset(self, change, data_source, add_word_id, dictionary, poisoning_prob=1.0):
-        poisoned_tensors = list()
-
-        for sentence in self.params['poison_sentences']:
-            sentence_ids = [dictionary.word2idx[x] for x in sentence.lower().split() if
-                            len(x) > 1 and dictionary.word2idx.get(x, False)]
-            # sentence_ids = [add_word_id] + sentence_ids
-            if change:
-                sentence_ids[0] = int(add_word_id)
-
-            sen_tensor = torch.LongTensor(sentence_ids)
-            len_t = len(sentence_ids)
-
-            poisoned_tensors.append((sen_tensor, len_t))
-
-        ## just to be on a safe side and not overflow
-        no_occurences = (data_source.shape[0] // (self.params['bptt']))
-
-
-        for i in range(1, no_occurences + 1):
-            if random.random() <= poisoning_prob:
-                # if i>=len(self.params['poison_sentences']):
-                pos = i % len(self.params['poison_sentences'])
-                sen_tensor, len_t = poisoned_tensors[pos]
-
-                position = min(i * (self.params['bptt']), data_source.shape[0] - 1)
-                data_source[position + 1 - len_t: position + 1, :] = \
-                    sen_tensor.unsqueeze(1).expand(len_t, data_source.shape[1])
-
-        return data_source, sentence_ids
-
-    def update_poison_dataset_with_sentence_ids(self, sentence_ids, data_source, dictionary, frond=False, poisoning_prob=1.0):
-        poisoned_tensors = list()
-
-        # if len(np.array(sentence_ids).shape) == 2:
-        if isinstance(sentence_ids[0], list):
-            for sentence_id in sentence_ids:
-                # print(sentence_id)
-                sen_tensor = torch.LongTensor(sentence_id)
-                len_t = len(sentence_id)
-                poisoned_tensors.append((sen_tensor, len_t))
-            num_posi_sentences = len(sentence_ids)
-        else:
-            sen_tensor = torch.LongTensor(sentence_ids)
-            len_t = len(sentence_ids)
-            poisoned_tensors.append((sen_tensor, len_t))
-            num_posi_sentences = 1
-
-        no_occurences = (data_source.shape[0] // (self.params['bptt']))
-        # no_occurences = 1
-        # print('no_occurences',no_occurences)
-        for i in range(1, no_occurences + 1):
-            if random.random() <= poisoning_prob:
-
-                pos = i % num_posi_sentences#len(self.params['poison_sentences'])
-
-                sen_tensor, len_t = poisoned_tensors[pos]
-
-                position = min(i * (self.params['bptt']), data_source.shape[0] - 1)
-
-                data_source[position + 1 - len_t: position + 1, :] = \
-                    sen_tensor.unsqueeze(1).expand(len_t, data_source.shape[1])
-
-
-        # logger.info(f'Dataset size: {data_source.shape} ')
-        print('data_source shape:',data_source.shape)
-
-        return data_source, sentence_ids
-
-    def get_new_poison_dataset_with_sentence_ids(self, sentence_ids, frond=False):
-        data_size = self.test_data.size(0) // self.params['bptt']
-        test_data_sliced = self.test_data.clone()[:data_size * self.params['bptt']]
-
-        print('test_data_sliced size=',test_data_sliced.size())
-        test_data_poison, sentence_ids = self.update_poison_dataset_with_sentence_ids(sentence_ids, test_data_sliced, dictionary, frond=frond)
-
-        poisoned_data = self.batchify(
-            self.corpus.tokenize_num_of_words(number_of_words=self.params['size_of_secret_dataset'] *
-                                                         self.params['batch_size']),
-            self.params['batch_size'])
-        poisoned_data_for_train, sentence_ids = self.update_poison_dataset_with_sentence_ids(sentence_ids, poisoned_data, dictionary,frond=frond,
-                                                           poisoning_prob=self.params[
-                                                               'poisoning'])
-        return poisoned_data_for_train, test_data_poison, sentence_ids
-
-
     def get_sentence(self, tensor):
         result = list()
         for entry in tensor:
             result.append(self.corpus.dictionary.idx2word[entry])
-
-        # logger.info(' '.join(result))
         return ' '.join(result)
 
     @staticmethod
@@ -329,7 +184,11 @@ class TextHelper(Helper):
     def load_attacker_data(self):
         if self.params['is_poison']:
             # Load poisoned data for training.
-            # First tokenize some benign data for the attacker
+
+            # First set self.params['poison_sentences']
+            self.load_trigger_sentence()
+
+            # tokenize some benign data for the attacker
             self.poisoned_data = self.batchify(
                 self.corpus.tokenize_num_of_words(number_of_words=self.params['size_of_secret_dataset'] *
                                                              self.params['batch_size']),
@@ -337,8 +196,8 @@ class TextHelper(Helper):
 
             if self.params['dual']:
                 # Temporarily add dual sentences for training
-                temp = copy.copy.deepcopy(self.params['poison_sentences'])
-                self.params['poison_sentences'] = self.params['poison_sentences'].extend(self.params['dual_sentences'])
+                temp = copy.deepcopy(self.params['poison_sentences'])
+                self.params['poison_sentences'].extend(self.params['dual_sentences'])
 
             # Mix benign data with backdoor trigger sentences
             self.poisoned_data_for_train = self.inject_trigger(self.poisoned_data,
@@ -392,9 +251,11 @@ class TextHelper(Helper):
         
         # Load pre-trained model
         if self.params['start_epoch'] > 1:
-            loaded_params = torch.load(os.path.join('saved_models', 'resume', f"model_epoch_{self.params['start_epoch'] - 1}"))
-            target_model.load_state_dict(loaded_params['state_dict'])
-            self.params['lr'] = loaded_params.get('lr', self.params['lr'])
+            # loaded_params = torch.load(os.path.join('saved_models', 'resume', f"model_epoch_{self.params['start_epoch'] - 1}"))
+            # target_model.load_state_dict(loaded_params['state_dict'])
+            # self.params['lr'] = loaded_params.get('lr', self.params['lr'])
+            loaded_params = torch.load('/work/yyaoqing/oliver/Personalized_SSFL/FL_Backdoor_2021_v6_NLP/checkpoint_layer2/model_epoch_16000.pth')
+            target_model.load_state_dict(loaded_params)
 
         self.local_model = local_model
         self.target_model = target_model
@@ -449,9 +310,9 @@ class TextHelper(Helper):
 
 
             if self.params['num_middle_token_same_structure'] > 100:
-                helper.params['size_of_secret_dataset'] = 1280*10
+                self.params['size_of_secret_dataset'] = 1280*10
             else:
-                helper.params['size_of_secret_dataset'] = 1280
+                self.params['size_of_secret_dataset'] = 1280
 
             self.params['poison_sentences'] = [x[0] for x in sentence_list_new]
 
