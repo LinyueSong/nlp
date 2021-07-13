@@ -25,18 +25,7 @@ class PGD():
     def attack(self, epsilon=0.5, alpha=0.3, emb_name='rnn', is_first_attack=False, attack_all_layer=False):
         self.attack_all_layer = attack_all_layer
         for name, param in self.model.named_parameters():
-            if attack_all_layer:
-                Flag = True
-            else:
-                Flag = False
-
-                if param.requires_grad and 'encoder' in name:
-                    Flag = True
-
-                if param.requires_grad and 'decoder' in name:
-                    Flag = True
-
-            if Flag:
+            if self.attack_all_layer or (param.requires_grad and ('encoder' in name or 'decoder' in name)):
                 # print('Adv. Train Embedding')
                 if is_first_attack:
                     self.emb_backup[name] = param.data.clone()
@@ -47,20 +36,8 @@ class PGD():
                     param.data = self.project(name, param.data, epsilon)
 
     def restore(self, emb_name='rnn'):
-
         for name, param in self.model.named_parameters():
-            if self.attack_all_layer:
-                Flag = True
-            else:
-                Flag = False
-
-                if param.requires_grad and 'encoder' in name:
-                    Flag = True
-
-                if param.requires_grad and 'decoder' in name:
-                    Flag = True
-
-            if Flag:
+            if self.attack_all_layer or (param.requires_grad and ('encoder' in name or 'decoder' in name)):
                 assert name in self.emb_backup
                 param.data = self.emb_backup[name]
         self.emb_backup = {}
@@ -132,13 +109,6 @@ class TextHelper(Helper):
         data = source[i:i + seq_len]
         target = source[i + 1:i + 1 + seq_len].view(-1)
 
-        return data, target
-
-    @staticmethod
-    def get_batch_poison(source, i, bptt, evaluation=False):
-        seq_len = min(bptt, len(source) - 1 - i)
-        data = Variable(source[i:i + seq_len], volatile=evaluation)
-        target = Variable(source[i + 1:i + 1 + seq_len].view(-1))
         return data, target
 
     def inject_trigger(self, data_source):
@@ -239,7 +209,7 @@ class TextHelper(Helper):
             # loaded_params = torch.load(os.path.join('saved_models', 'resume', f"model_epoch_{self.params['start_epoch'] - 1}"))
             # target_model.load_state_dict(loaded_params['state_dict'])
             # self.params['lr'] = loaded_params.get('lr', self.params['lr'])
-            loaded_params = torch.load('/work/yyaoqing/oliver/Personalized_SSFL/FL_Backdoor_2021_v6_NLP/checkpoint_layer2/model_epoch_16000.pth')
+            loaded_params = torch.load('/work/yyaoqing/oliver/Personalized_SSFL/FL_Backdoor_2021_v6_NLP/checkpoint_layer2/model_epoch_2000.pth')
             target_model.load_state_dict(loaded_params)
 
         self.local_model = local_model
@@ -305,3 +275,11 @@ class TextHelper(Helper):
                 self.params['size_of_secret_dataset'] = 1280
                 cand_sen_list = [18, 19, 23, 24, 25]
                 self.params['dual_sentences'] = [sentence_list[i][0] for i in cand_sen_list]
+        sentence_name = None
+        if self.params['same_structure']:
+            sentence_name = copy.deepcopy(self.params['poison_sentences'][0]).split()
+            sentence_name[middle_token_id] = '*'
+            sentence_name = ' '.join(sentence_name)
+        else:
+            sentence_name = self.params['poison_sentences']
+        self.params['sentence_name'] = sentence_name

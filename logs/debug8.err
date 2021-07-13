@@ -1,0 +1,2 @@
+/work/yyaoqing/oliver/nlp/helper.py:55: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).
+  l2_norm = torch.norm(torch.tensor(difference_flat, requires_grad=False).cuda())

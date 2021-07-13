@@ -20,12 +20,6 @@ class SimpleNet(nn.Module):
 
         for name, param in state_dict.items():
             if name in own_state:
-                shape = param.shape
-                #
-                random_tensor = (torch.cuda.FloatTensor(shape).random_(0, 100) <= coefficient_transfer).type(
-                    torch.cuda.FloatTensor)
-                negative_tensor = (random_tensor*-1)+1
-                # own_state[name].copy_(param)
                 own_state[name].copy_(param.clone())
 
 

@@ -33,37 +33,32 @@ class Helper:
 
         self.params = params
         self.best_loss = math.inf
-       
-    @staticmethod
-    def model_global_norm(model):
-        squared_sum = 0
-        for name, layer in model.named_parameters():
-            squared_sum += torch.sum(torch.pow(layer.data, 2))
-        return math.sqrt(squared_sum)
 
     @staticmethod
-    def model_dist_norm(model, target_params):
-        squared_sum = 0
-        for name, layer in model.named_parameters():
-            squared_sum += torch.sum(torch.pow(layer.data - target_params[name].data, 2))
-        return math.sqrt(squared_sum)
+    def get_weight_difference(weight1, weight2):
+        difference = {}
+        res = []
+        if type(weight2) == dict:
+            for name, layer in weight1.items():
+                difference[name] = layer.data - weight2[name].data
+                res.append(difference[name].view(-1))
+        else:
+            for name, layer in weight2:
+                difference[name] = weight1[name].data - layer.data
+                res.append(difference[name].view(-1))
 
+        difference_flat = torch.cat(res)
+        return difference, difference_flat
 
     @staticmethod
-    def model_max_values(model, target_params):
-        squared_sum = list()
-        for name, layer in model.named_parameters():
-            squared_sum.append(torch.max(torch.abs(layer.data - target_params[name].data)))
-        return squared_sum
+    def clip_grad(norm_bound, weight_difference, difference_flat):
+        l2_norm = torch.norm(torch.tensor(difference_flat, requires_grad=False).cuda())
+        scale =  max(1, float(torch.abs(l2_norm / norm_bound)))
+        for name in weight_difference.keys():
+            weight_difference[name] /= scale
+        return weight_difference, l2_norm
 
-
-    @staticmethod
-    def model_max_values_var(model, target_params):
-        squared_sum = list()
-        for name, layer in model.named_parameters():
-            squared_sum.append(torch.max(torch.abs(layer - target_params[name])))
-        return sum(squared_sum)
-
+  
     @staticmethod
     def get_one_vec(model, variable=False):
         size = 0
@@ -146,16 +141,15 @@ class Helper:
 
         return
 
-    def grad_mask(self, helper, model, dataset_clearn, optimizer, criterion):
+    def grad_mask(self, helper, model, dataset_clearn, criterion):
         """Generate a gradient mask based on the given dataset"""
         data_iterator = range(0, dataset_clearn.size(0) - 1, helper.params['bptt'])
         hidden = model.init_hidden(helper.params['batch_size'])
         ntokens = 50000
-        optimizer.zero_grad()
+        model.zero_grad()
         for batch in data_iterator:
             model.train()
-            data, targets = helper.get_batch(dataset_clearn, batch,
-                                              evaluation=False)
+            data, targets = helper.get_batch(dataset_clearn, batch)
             hidden = helper.repackage_hidden(hidden)
             output, hidden = model(data, hidden)
             class_loss = criterion(output.view(-1, ntokens), targets)
@@ -168,7 +162,7 @@ class Helper:
                 print(mask.sum())
                 mask_grad_list.append(mask)
 
-        optimizer.zero_grad()
+        model.zero_grad()
         return mask_grad_list
 
     def test_poison(self, helper, epoch, data_source, criterion,
@@ -186,7 +180,7 @@ class Helper:
             dataset_size = len(data_source)
 
         for batch_id, batch in enumerate(data_iterator):
-            data, targets = helper.get_batch(data_source, batch, evaluation=True)
+            data, targets = helper.get_batch(data_source, batch)
 
             output, hidden = model(data, hidden)
 
@@ -278,7 +272,7 @@ class Helper:
                 num_data = 0
                 for batch_id, batch in enumerate(data_iterator):
                     poison_optimizer.zero_grad()
-                    data, targets = helper.get_batch(poisoned_data, batch, False)
+                    data, targets = helper.get_batch(poisoned_data, batch)
 
                     if data.size(0) != 64:
                         continue
@@ -414,7 +408,7 @@ class Helper:
         std_grad = 0.0
         for batch_id, batch in enumerate(data_iterator):
             model.train()
-            data, targets = helper.get_batch(poisoned_data, batch, False)
+            data, targets = helper.get_batch(poisoned_data, batch)
             poison_optimizer.zero_grad()
             hidden = helper.repackage_hidden(hidden)
             output, hidden = model(data, hidden)
@@ -458,7 +452,7 @@ class Helper:
             data_iterator = range(0, poisoned_data.size(0) - 1, helper.params['bptt'])
             for batch_id, batch in enumerate(data_iterator):
                 model.train()
-                data, targets = helper.get_batch(poisoned_data, batch, False)
+                data, targets = helper.get_batch(poisoned_data, batch)
                 poison_optimizer.zero_grad()
                 hidden = helper.repackage_hidden(hidden)
                 output, hidden = model(data, hidden)
@@ -487,8 +481,7 @@ class Helper:
             for batch_id, batch_1 in enumerate(data_iterator):
                 model.train()
                 optimizer.zero_grad()
-                data, targets = helper.get_batch(dataset_clearn, batch_1,
-                                                  evaluation=False)
+                data, targets = helper.get_batch(dataset_clearn, batch_1)
 
                 hidden = helper.repackage_hidden(hidden)
                 output, hidden = model(data, hidden)

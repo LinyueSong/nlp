@@ -16,16 +16,23 @@ number_of_total_participants: 80000
 # number_of_total_participants: 800
 eta: 8000
 
+# experiment_name: the_buy_new_phone_from_Google
+experiment_name: buy new phone from Google_AdverTrain_PGD_resume
+
 poison_type: words
 save_model: false
 save_on_epochs: []
+environment_name: PPDL_SEP_MULTI_SENTENCES
+report_train_loss: false
+report_test_loss: false
+report_poison_loss: true
 output_examples: false
 log_interval: 1
-report_train_loss: false
 
 
 
-is_poison: false
+is_poison: true
+baseline: false
 
 # Randomly sample attackers at each round
 random_compromise: false
@@ -37,9 +44,11 @@ partipant_population: 8000
 partipant_sample_size: 10
 
 size_of_secret_dataset: 1280
-poison_epochs: []
+poison_epochs: [2001]
 traget_poison_acc: [10,20,30,40,50,60,70,80,90,100]
-retrain_poison: 250
+retrain_poison: 10
+min_loss_p: 100000000.0
+traget_labeled: []
 attack_num: 0
 scale_weights: 100
 poison_lr: 0.2
@@ -62,6 +71,9 @@ poison_sentences: [buy new phone from Google]
 # first credit card by Chase,
 # search online using Bing]
 
+
+
+diff_privacy: false
 sigma: 0.0
 
 
