@@ -15,7 +15,6 @@ from torchvision import transforms
 from image_helper import ImageHelper
 from text_helper import TextHelper
 from utils.utils import dict_html
-from torch.autograd.gradcheck import zero_gradients
 logger = logging.getLogger("logger")
 import yaml
 try:
@@ -393,8 +392,8 @@ def save_acc_file(prefix=None,acc_list=None,sentence=None,new_folder_name=None):
         with open(filename, 'w') as f:
             json.dump(acc_list, f)
 
-def save_model(helper, epoch):
-    path_checkpoint = f"./saved_models/resume/"
+def save_model(helper, epoch, prefix=None):
+    path_checkpoint = f"./saved_models/{prefix}/"
     if not os.path.exists(path_checkpoint):
         os.makedirs(path_checkpoint)
     torch.save(helper.target_model.state_dict(), path_checkpoint+f"model_epoch_{epoch}.pth")
@@ -402,6 +401,7 @@ def save_model(helper, epoch):
 
 if __name__ == '__main__':
     ## python training_adver_update.py --run_slurm 1 --sentence_id_list 0 --start_epoch 2001 --num_middle_token_same_structure 10
+    ## nohup python training_adver_update.py --GPU_id=2  --sentence_id_list=0 --num_middle_token_same_structure=10 --s_norm=20 &
     ## srun -N 1 -n 1  --nodelist=bombe --gres=gpu:1 python training_adver_update.py --run_slurm 1 --sentence_id_list 0 --start_epoch 2001 --num_middle_token_same_structure 10
     ## >~/zhengming/Sentence1_Duel1_GradMask1_PGD1_AttackAllLayer0_Ripple0_AllTokenLoss1.log 2>~/zhengming/Sentence1_Duel1_GradMask1_PGD1_AttackAllLayer0_Ripple0_AllTokenLoss1.err &
     print('Start training')
@@ -417,11 +417,6 @@ if __name__ == '__main__':
                         default=None,
                         type=str,
                         help='new_folder_name')
-
-    parser.add_argument('--save_epoch',
-                        default=100,
-                        type=int,
-                        help='save_epoch')
 
     parser.add_argument('--poison_lr',
                         default=0.1,
@@ -485,7 +480,7 @@ if __name__ == '__main__':
                         help='semantic_target')
 
     parser.add_argument('--diff_privacy',
-                        default=False,
+                        default=True,
                         type=bool,
                         help='diff_privacy')
 
@@ -557,11 +552,11 @@ if __name__ == '__main__':
         else:
             if epoch in helper.params['poison_epochs']:
                sampled_participants = helper.params['adversary_list'] \
-                                        + random.sample(range(helper.params['number_of_adversaries'], helper.params['partipant_population'])
+                                        + random.sample(range(301, helper.params['partipant_population'])
                                         , helper.params['partipant_sample_size'] - helper.params['number_of_adversaries'])
  
             else:
-                sampled_participants = random.sample(range(helper.params['number_of_adversaries'], helper.params['partipant_population'])
+                sampled_participants = random.sample(range(301, helper.params['partipant_population'])
                                         , helper.params['partipant_sample_size'])
 
         print(f'Selected models: {sampled_participants}')
@@ -603,9 +598,9 @@ if __name__ == '__main__':
                                      model=helper.target_model)
         benign_acc.append(epoch_acc)
 
-        if epoch in helper.params['save_on_epochs']:
-            save_model(helper, epoch)
+        if epoch % 1000 == 0:
+            save_model(helper, epoch, prefix=str(helper.params['s_norm']) + '_4_400')
     #### save benign acc
-    save_acc_file(prefix=helper.params['s_norm'], acc_list=benign_acc, sentence='None', new_folder_name=args.new_folder_name)
+    save_acc_file(prefix=helper.params['s_norm'], acc_list=benign_acc, sentence='4_400', new_folder_name=args.new_folder_name)
         
     print(f'Done in {time.time()-start_time} sec.')
